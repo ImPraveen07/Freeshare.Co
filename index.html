@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fasty Pro - 5m Expiry</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.3/StreamSaver.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: white; text-align: center; padding: 20px; }
+        .container { max-width: 450px; margin: 40px auto; background: #1e293b; padding: 30px; border-radius: 20px; border: 1px solid #334155; }
+        #progress-bar { width: 0%; height: 10px; background: #3b82f6; border-radius: 5px; transition: width 0.2s; margin-top: 20px; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        #status { color: #94a3b8; font-size: 0.9rem; margin-top: 15px; }
+        .expiry-msg { color: #ef4444; font-weight: bold; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🚀 Fasty Pro</h1>
+    <div id="status">Ready</div>
+    <div id="expiry-notice" class="expiry-msg">❌ Link Expired! Please request a new one.</div>
+
+    <div id="ui-area">
+        <input type="file" id="fileInput" style="display:none">
+        <button class="btn" id="actionBtn" onclick="document.getElementById('fileInput').click()">Select File</button>
+    </div>
+
+    <div id="link-area" style="display:none; margin-top:20px;">
+        <p style="font-size:0.8rem">Link valid for 5 minutes:</p>
+        <div id="link-display" style="background:#0f172a; padding:10px; font-size:10px; color:#60a5fa; cursor:pointer;" onclick="copyLink()">Click to Copy</div>
+    </div>
+
+    <div id="progress-bar"></div>
+    <p id="percent">0%</p>
+</div>
+
+<script>
+    const peer = new Peer();
+    let conn;
+    const CHUNK_SIZE = 64 * 1024; 
+    const EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+    // 1. Check Link Validity on Load
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetId = urlParams.get('id');
+    const timestamp = parseInt(urlParams.get('t'));
+
+    peer.on('open', id => {
+        if (targetId && timestamp) {
+            const now = Date.now();
+            if (now - timestamp > EXPIRY_TIME) {
+                document.getElementById('expiry-notice').style.display = 'block';
+                document.getElementById('ui-area').style.display = 'none';
+                document.getElementById('status').innerText = "Expired";
+            } else {
+                document.getElementById('status').innerText = "Connecting...";
+                conn = peer.connect(targetId, { reliable: true });
+                setupTransferLogic();
+            }
+        }
+    });
+
+    // 2. Sender: Generate Timed Link
+    document.getElementById('fileInput').onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const timedUrl = `${window.location.origin}${window.location.pathname}?id=${peer.id}&t=${Date.now()}`;
+        document.getElementById('link-display').innerText = timedUrl;
+        document.getElementById('link-area').style.display = 'block';
+        document.getElementById('status').innerText = "Waiting for friend...";
+    };
+
+    peer.on('connection', c => {
+        conn = c;
+        setupTransferLogic();
+    });
+
+    function setupTransferLogic() {
+        conn.on('open', () => {
+            const file = document.getElementById('fileInput').files[0];
+            if (file) {
+                conn.send({ type: 'meta', name: file.name, size: file.size });
+                beginStreaming(file);
+            }
+        });
+
+        let writer;
+        conn.on('data', data => {
+            if (data.type === 'meta') {
+                const fileStream = streamSaver.createWriteStream(data.name, { size: data.size });
+                writer = fileStream.getWriter();
+                document.getElementById('status').innerText = "Receiving...";
+            } else if (data.type === 'chunk') {
+                writer.write(new Uint8Array(data.chunk));
+                const p = Math.round((data.offset / data.total) * 100);
+                updateUI(p);
+                if (data.offset + data.chunk.byteLength >= data.total) {
+                    writer.close();
+                    document.getElementById('status').innerText = "Saved to Downloads!";
+                }
+            }
+        });
+    }
+
+    async function beginStreaming(file) {
+        let offset = 0;
+        const reader = new FileReader();
+
+        const stream = () => {
+            if (conn.dataChannel.bufferedAmount > 1024 * 1024) {
+                setTimeout(stream, 50);
+                return;
+            }
+            const slice = file.slice(offset, offset + CHUNK_SIZE);
+            reader.readAsArrayBuffer(slice);
+        };
+
+        reader.onload = e => {
+            conn.send({ type: 'chunk', chunk: e.target.result, offset: offset, total: file.size });
+            offset += CHUNK_SIZE;
+            updateUI(Math.round((offset / file.size) * 100));
+            if (offset < file.size) stream();
+        };
+        stream();
+    }
+
+    function updateUI(p) {
+        document.getElementById('progress-bar').style.width = p + "%";
+        document.getElementById('percent').innerText = p + "%";
+    }
+
+    function copyLink() {
+        navigator.clipboard.writeText(document.getElementById('link-display').innerText);
+        alert("Link copied! Valid for 5 minutes.");
+    }
+</script>
+</body>
+</html>
+
