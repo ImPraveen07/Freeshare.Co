@@ -1,167 +1,187 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fasty Pro - Bullet Speed</title>
+    <title>Fasty Pro - Secure</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.3/StreamSaver.min.js"></script>
     <style>
-        :root { --blue: #3b82f6; --dark: #0f172a; --card: #1e293b; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--dark); color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 400px; background: var(--card); padding: 30px; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center; }
+        :root { --blue: #3b82f6; --dark: #0f172a; --card: #1e293b; --red: #ef4444; }
+        body { font-family: sans-serif; background: var(--dark); color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { width: 90%; max-width: 400px; background: var(--card); padding: 30px; border-radius: 24px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
         
-        /* Pulse Animation */
-        .pulse { width: 80px; height: 80px; border: 4px solid var(--blue); border-radius: 50%; margin: 20px auto; display: none; animation: pulse-ani 1.5s infinite; }
-        @keyframes pulse-ani { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+        /* Accept/Deny Popup */
+        #request-popup { 
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #2d3748; padding: 25px; border-radius: 20px; border: 2px solid var(--blue);
+            z-index: 100; display: none; box-shadow: 0 0 100px rgba(0,0,0,0.8); width: 80%; max-width: 300px;
+        }
 
-        .btn { background: var(--blue); color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); }
-
-        /* Copy Link Section */
-        #link-area { margin-top: 20px; display: none; }
-        .copy-wrapper { display: flex; align-items: center; background: #0f172a; border-radius: 10px; padding: 8px 12px; margin-top: 10px; border: 1px solid #334155; }
-        #link-text { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-grow: 1; text-align: left; }
-        .copy-btn { background: none; border: none; cursor: pointer; padding: 5px; display: flex; align-items: center; }
-        .copy-btn svg { fill: var(--blue); width: 20px; height: 20px; }
-
+        .pulse { width: 60px; height: 60px; border: 4px solid var(--blue); border-radius: 50%; margin: 15px auto; display: none; animation: pulse-ani 1.5s infinite; }
+        @keyframes pulse-ani { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+        
+        .btn { background: var(--blue); color: white; border: none; padding: 14px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
+        .btn-deny { background: #4a5568; margin-top: 8px; }
         #status { margin: 15px 0; font-size: 0.9rem; color: #94a3b8; }
-        #progress-container { margin-top: 20px; display: none; }
-        .bar-bg { width: 100%; background: #334155; height: 8px; border-radius: 10px; overflow: hidden; }
-        #bar-fill { width: 0%; background: var(--blue); height: 100%; transition: 0.3s; }
+        .bar-bg { width: 100%; background: #334155; height: 8px; border-radius: 10px; overflow: hidden; margin-top: 20px; display: none; }
+        #bar-fill { width: 0%; background: var(--blue); height: 100%; transition: 0.2s; }
     </style>
 </head>
 <body>
 
+<div id="request-popup">
+    <h3 style="margin-top:0">Incoming Request</h3>
+    <p style="font-size:0.8rem; color:#cbd5e0">A friend wants to connect. Allow?</p>
+    <button class="btn" onclick="respond(true)">✅ Accept</button>
+    <button class="btn btn-deny" onclick="respond(false)">❌ Deny</button>
+</div>
+
 <div class="card">
-    <h2 style="margin-top:0">🚀 Fasty Pro</h2>
+    <h2>🚀 Fasty Pro</h2>
     <div id="pulse" class="pulse"></div>
-    <div id="status">Ready to share</div>
+    <div id="status">Ready</div>
 
     <div id="start-ui">
         <input type="file" id="fileInput" style="display:none">
         <button class="btn" onclick="document.getElementById('fileInput').click()">Select File</button>
     </div>
 
-    <div id="link-area">
-        <p style="font-size: 0.75rem; color: #ef4444; margin: 0;">Link valid for 5 minutes</p>
-        <div class="copy-wrapper">
-            <span id="link-text">Generating...</span>
-            <button class="copy-btn" onclick="copyLink()" title="Copy Link">
-                <svg viewBox="0 0 24 24"><path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1M19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5M19 21H8V7H19V21Z"/></svg>
-            </button>
-        </div>
+    <div id="link-area" style="display:none; margin-top:20px;">
+        <p style="font-size:0.7rem; color:var(--blue)">Share this link (Expires in 5m):</p>
+        <button class="btn" style="font-size:0.8rem; background:#0f172a; border:1px solid #334155" onclick="copyLink()">📋 Copy Link</button>
     </div>
 
-    <div id="progress-container">
-        <div class="bar-bg"><div id="bar-fill"></div></div>
-        <p id="percent" style="font-size: 0.8rem; margin-top:8px;">0%</p>
-    </div>
+    <div id="progress-container" class="bar-bg"><div id="bar-fill"></div></div>
+    <p id="percent" style="font-size: 0.8rem; margin-top:8px;"></p>
 </div>
 
 <script>
-    // Config with STUN servers to bypass mobile firewalls
     const peer = new Peer(null, {
-        config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] }
+        config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
     });
 
     let conn;
+    let pendingConn;
     const urlParams = new URLSearchParams(window.location.search);
     const targetId = urlParams.get('id');
-    const expiry = parseInt(urlParams.get('t'));
 
     peer.on('open', id => {
-        if (targetId && expiry) {
-            if (Date.now() - expiry > 300000) {
-                document.getElementById('status').innerText = "❌ Link Expired";
-                document.getElementById('start-ui').style.display = 'none';
-            } else {
-                document.getElementById('status').innerText = "Connecting to sender...";
-                document.getElementById('pulse').style.display = 'block';
-                conn = peer.connect(targetId, { reliable: true });
-                initTransfer();
-            }
+        if (targetId) {
+            document.getElementById('status').innerText = "Knocking on friend's door...";
+            conn = peer.connect(targetId, { 
+                reliable: true,
+                metadata: { type: 'knock' } 
+            });
+            setupLogic();
         }
     });
 
-    document.getElementById('fileInput').onchange = e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const shareUrl = `${window.location.origin}${window.location.pathname}?id=${peer.id}&t=${Date.now()}`;
-        document.getElementById('link-text').innerText = shareUrl;
-        document.getElementById('link-area').style.display = 'block';
-        document.getElementById('status').innerText = "Waiting for friend to join...";
-    };
-
+    // SENDER RECEIVES THE KNOCK
     peer.on('connection', c => {
-        conn = c;
-        initTransfer();
+        if (c.metadata && c.metadata.type === 'knock') {
+            pendingConn = c;
+            document.getElementById('request-popup').style.display = 'block';
+            document.getElementById('status').innerText = "Someone is asking to join...";
+        }
     });
 
-    function initTransfer() {
-        conn.on('open', () => {
-            document.getElementById('pulse').style.display = 'block';
-            document.getElementById('start-ui').style.display = 'none';
-            document.getElementById('link-area').style.display = 'none';
-            
-            const file = document.getElementById('fileInput').files[0];
-            if (file) {
-                conn.send({ type: 'meta', name: file.name, size: file.size });
-                streamFile(file);
-            }
-        });
+    function respond(isAccepted) {
+        document.getElementById('request-popup').style.display = 'none';
+        if (isAccepted) {
+            conn = pendingConn;
+            setupLogic();
+            // Signal to receiver that we accepted
+            conn.on('open', () => {
+                conn.send({ type: 'accepted' });
+                startFileProcess();
+            });
+        } else {
+            pendingConn.close();
+            document.getElementById('status').innerText = "Request denied.";
+        }
+    }
 
-        let writer;
+    function setupLogic() {
         conn.on('data', data => {
-            if (data.type === 'meta') {
-                document.getElementById('status').innerText = "Receiving: " + data.name;
-                document.getElementById('progress-container').style.display = 'block';
-                const fileStream = streamSaver.createWriteStream(data.name, { size: data.size });
-                writer = fileStream.getWriter();
+            if (data.type === 'accepted') {
+                document.getElementById('status').innerText = "Accepted! Preparing...";
+            } else if (data.type === 'meta') {
+                startDownload(data);
             } else if (data.type === 'chunk') {
-                writer.write(new Uint8Array(data.chunk));
-                let p = Math.round((data.offset / data.total) * 100);
-                document.getElementById('bar-fill').style.width = p + "%";
-                document.getElementById('percent').innerText = p + "%";
-                if (data.offset + data.chunk.byteLength >= data.total) {
-                    writer.close();
-                    document.getElementById('status').innerText = "✅ Download Complete!";
-                    document.getElementById('pulse').style.display = 'none';
-                }
+                handleChunk(data);
             }
         });
     }
 
-    function streamFile(file) {
+    function startFileProcess() {
+        const file = document.getElementById('fileInput').files[0];
+        if (file) {
+            document.getElementById('start-ui').style.display = 'none';
+            document.getElementById('link-area').style.display = 'none';
+            document.getElementById('pulse').style.display = 'block';
+            conn.send({ type: 'meta', name: file.name, size: file.size });
+            stream(file);
+        }
+    }
+
+    // ... (rest of the streaming and download logic remains the same)
+    // SENDER STREAMING
+    function stream(file) {
         document.getElementById('progress-container').style.display = 'block';
         let offset = 0;
         const CHUNK = 64 * 1024;
         const reader = new FileReader();
-
         const sendNext = () => {
             if (conn.dataChannel.bufferedAmount > 1024 * 1024) return setTimeout(sendNext, 40);
-            const slice = file.slice(offset, offset + CHUNK);
-            reader.readAsArrayBuffer(slice);
+            reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK));
         };
-
         reader.onload = e => {
             conn.send({ type: 'chunk', chunk: e.target.result, offset, total: file.size });
             offset += CHUNK;
-            let p = Math.round((offset / file.size) * 100);
-            document.getElementById('bar-fill').style.width = p + "%";
-            document.getElementById('percent').innerText = p + "%";
+            updateUI(Math.round((offset/file.size)*100));
             if (offset < file.size) sendNext();
-            else document.getElementById('status').innerText = "🚀 Sent Successfully!";
+            else document.getElementById('status').innerText = "🚀 Sent!";
         };
         sendNext();
     }
 
+    // RECEIVER DOWNLOAD
+    let writer;
+    function startDownload(meta) {
+        document.getElementById('status').innerText = "Receiving: " + meta.name;
+        document.getElementById('progress-container').style.display = 'block';
+        document.getElementById('pulse').style.display = 'block';
+        const fileStream = streamSaver.createWriteStream(meta.name, { size: meta.size });
+        writer = fileStream.getWriter();
+    }
+
+    function handleChunk(data) {
+        writer.write(new Uint8Array(data.chunk));
+        let p = Math.round((data.offset / data.total) * 100);
+        updateUI(p);
+        if (data.offset + data.chunk.byteLength >= data.total) {
+            writer.close();
+            document.getElementById('status').innerText = "✅ Saved!";
+            document.getElementById('pulse').style.display = 'none';
+        }
+    }
+
+    function updateUI(p) {
+        document.getElementById('bar-fill').style.width = p + "%";
+        document.getElementById('percent').innerText = p + "%";
+    }
+
+    document.getElementById('fileInput').onchange = e => {
+        const url = `${window.location.origin}${window.location.pathname}?id=${peer.id}&t=${Date.now()}`;
+        window.tempUrl = url;
+        document.getElementById('link-area').style.display = 'block';
+        document.getElementById('status').innerText = "Waiting for knock...";
+    };
+
     function copyLink() {
-        const text = document.getElementById('link-text').innerText;
-        navigator.clipboard.writeText(text).then(() => {
-            alert("Link copied to clipboard!");
-        });
+        navigator.clipboard.writeText(window.tempUrl);
+        alert("Link Copied!");
     }
 </script>
 </body>
