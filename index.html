@@ -2,187 +2,86 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fasty Pro - Secure</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/streamsaver@2.0.3/StreamSaver.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Auragram | Snap Fix</title>
+    <script async src="https://www.snapchat.com/js/embed.js"></script>
+    
     <style>
-        :root { --blue: #3b82f6; --dark: #0f172a; --card: #1e293b; --red: #ef4444; }
-        body { font-family: sans-serif; background: var(--dark); color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 400px; background: var(--card); padding: 30px; border-radius: 24px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        
-        /* Accept/Deny Popup */
-        #request-popup { 
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #2d3748; padding: 25px; border-radius: 20px; border: 2px solid var(--blue);
-            z-index: 100; display: none; box-shadow: 0 0 100px rgba(0,0,0,0.8); width: 80%; max-width: 300px;
+        * { margin:0; padding:0; box-sizing:border-box; font-family: sans-serif; }
+        body { background:#000; color:#fff; overflow:hidden; }
+
+        .top-nav {
+            position: fixed; top:0; width:100%; padding:15px;
+            background:rgba(0,0,0,0.8); z-index:100; display:flex; gap:10px;
+        }
+        input { flex:1; padding:10px; border-radius:8px; border:none; background:#222; color:#fff; }
+        button { padding:10px 20px; border-radius:8px; border:none; background:#FFFC00; color:#000; font-weight:bold; }
+
+        #feed { height:100vh; overflow-y:scroll; scroll-snap-type:y mandatory; scrollbar-width:none; }
+        .reel { 
+            height:100vh; width:100%; scroll-snap-align:start; 
+            display:flex; align-items:center; justify-content:center; position:relative;
         }
 
-        .pulse { width: 60px; height: 60px; border: 4px solid var(--blue); border-radius: 50%; margin: 15px auto; display: none; animation: pulse-ani 1.5s infinite; }
-        @keyframes pulse-ani { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+        /* The Fix: Ensuring the container has height */
+        .snap-box { width:100%; height:90vh; display:flex; justify-content:center; }
         
-        .btn { background: var(--blue); color: white; border: none; padding: 14px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
-        .btn-deny { background: #4a5568; margin-top: 8px; }
-        #status { margin: 15px 0; font-size: 0.9rem; color: #94a3b8; }
-        .bar-bg { width: 100%; background: #334155; height: 8px; border-radius: 10px; overflow: hidden; margin-top: 20px; display: none; }
-        #bar-fill { width: 0%; background: var(--blue); height: 100%; transition: 0.2s; }
+        iframe, video { width:100%; height:100%; border:none; }
+        
+        .loading-text { position:absolute; z-index:-1; color:#444; }
     </style>
 </head>
 <body>
 
-<div id="request-popup">
-    <h3 style="margin-top:0">Incoming Request</h3>
-    <p style="font-size:0.8rem; color:#cbd5e0">A friend wants to connect. Allow?</p>
-    <button class="btn" onclick="respond(true)">✅ Accept</button>
-    <button class="btn btn-deny" onclick="respond(false)">❌ Deny</button>
-</div>
-
-<div class="card">
-    <h2>🚀 Fasty Pro</h2>
-    <div id="pulse" class="pulse"></div>
-    <div id="status">Ready</div>
-
-    <div id="start-ui">
-        <input type="file" id="fileInput" style="display:none">
-        <button class="btn" onclick="document.getElementById('fileInput').click()">Select File</button>
+    <div class="top-nav">
+        <input type="text" id="link" placeholder="Paste Snap Spotlight Link...">
+        <button onclick="addSnap()">ADD</button>
     </div>
 
-    <div id="link-area" style="display:none; margin-top:20px;">
-        <p style="font-size:0.7rem; color:var(--blue)">Share this link (Expires in 5m):</p>
-        <button class="btn" style="font-size:0.8rem; background:#0f172a; border:1px solid #334155" onclick="copyLink()">📋 Copy Link</button>
-    </div>
+    <div id="feed"></div>
 
-    <div id="progress-container" class="bar-bg"><div id="bar-fill"></div></div>
-    <p id="percent" style="font-size: 0.8rem; margin-top:8px;"></p>
-</div>
+    <script>
+        function addSnap() {
+            let url = document.getElementById('link').value.trim();
+            if(!url) return;
 
-<script>
-    const peer = new Peer(null, {
-        config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
-    });
+            // Clean the URL (removes tracking junk)
+            if(url.includes('?')) url = url.split('?')[0];
 
-    let conn;
-    let pendingConn;
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetId = urlParams.get('id');
+            const feed = document.getElementById('feed');
+            const div = document.createElement('div');
+            div.className = 'reel';
 
-    peer.on('open', id => {
-        if (targetId) {
-            document.getElementById('status').innerText = "Knocking on friend's door...";
-            conn = peer.connect(targetId, { 
-                reliable: true,
-                metadata: { type: 'knock' } 
-            });
-            setupLogic();
+            // We use a clean Embed format
+            div.innerHTML = `
+                <div class="loading-text">Loading Video...</div>
+                <div class="snap-box">
+                    <blockquote class="snapchat-embed" 
+                        data-snapchat-embed-url="${url}" 
+                        data-snapchat-embed-width="100%" 
+                        data-snapchat-embed-height="100%">
+                    </blockquote>
+                </div>
+            `;
+
+            feed.prepend(div);
+            document.getElementById('link').value = "";
+            div.scrollIntoView({behavior:'smooth'});
+
+            // 1. Tell Snapchat to render
+            if(window.snapchat) window.snapchat.embed();
+
+            // 2. THE ULTIMATE FALLBACK
+            // If it's still black/empty after 3 seconds, we force an iframe
+            setTimeout(() => {
+                const box = div.querySelector('.snap-box');
+                // Check if the SDK actually put an iframe inside
+                if (box.innerHTML.includes('blockquote') && !box.querySelector('iframe')) {
+                    console.log("SDK Failed. Switching to Iframe Fallback...");
+                    box.innerHTML = `<iframe src="${url.replace('snapchat.com', 'snapchat.com/embed')}" allow="autoplay"></iframe>`;
+                }
+            }, 3000);
         }
-    });
-
-    // SENDER RECEIVES THE KNOCK
-    peer.on('connection', c => {
-        if (c.metadata && c.metadata.type === 'knock') {
-            pendingConn = c;
-            document.getElementById('request-popup').style.display = 'block';
-            document.getElementById('status').innerText = "Someone is asking to join...";
-        }
-    });
-
-    function respond(isAccepted) {
-        document.getElementById('request-popup').style.display = 'none';
-        if (isAccepted) {
-            conn = pendingConn;
-            setupLogic();
-            // Signal to receiver that we accepted
-            conn.on('open', () => {
-                conn.send({ type: 'accepted' });
-                startFileProcess();
-            });
-        } else {
-            pendingConn.close();
-            document.getElementById('status').innerText = "Request denied.";
-        }
-    }
-
-    function setupLogic() {
-        conn.on('data', data => {
-            if (data.type === 'accepted') {
-                document.getElementById('status').innerText = "Accepted! Preparing...";
-            } else if (data.type === 'meta') {
-                startDownload(data);
-            } else if (data.type === 'chunk') {
-                handleChunk(data);
-            }
-        });
-    }
-
-    function startFileProcess() {
-        const file = document.getElementById('fileInput').files[0];
-        if (file) {
-            document.getElementById('start-ui').style.display = 'none';
-            document.getElementById('link-area').style.display = 'none';
-            document.getElementById('pulse').style.display = 'block';
-            conn.send({ type: 'meta', name: file.name, size: file.size });
-            stream(file);
-        }
-    }
-
-    // ... (rest of the streaming and download logic remains the same)
-    // SENDER STREAMING
-    function stream(file) {
-        document.getElementById('progress-container').style.display = 'block';
-        let offset = 0;
-        const CHUNK = 64 * 1024;
-        const reader = new FileReader();
-        const sendNext = () => {
-            if (conn.dataChannel.bufferedAmount > 1024 * 1024) return setTimeout(sendNext, 40);
-            reader.readAsArrayBuffer(file.slice(offset, offset + CHUNK));
-        };
-        reader.onload = e => {
-            conn.send({ type: 'chunk', chunk: e.target.result, offset, total: file.size });
-            offset += CHUNK;
-            updateUI(Math.round((offset/file.size)*100));
-            if (offset < file.size) sendNext();
-            else document.getElementById('status').innerText = "🚀 Sent!";
-        };
-        sendNext();
-    }
-
-    // RECEIVER DOWNLOAD
-    let writer;
-    function startDownload(meta) {
-        document.getElementById('status').innerText = "Receiving: " + meta.name;
-        document.getElementById('progress-container').style.display = 'block';
-        document.getElementById('pulse').style.display = 'block';
-        const fileStream = streamSaver.createWriteStream(meta.name, { size: meta.size });
-        writer = fileStream.getWriter();
-    }
-
-    function handleChunk(data) {
-        writer.write(new Uint8Array(data.chunk));
-        let p = Math.round((data.offset / data.total) * 100);
-        updateUI(p);
-        if (data.offset + data.chunk.byteLength >= data.total) {
-            writer.close();
-            document.getElementById('status').innerText = "✅ Saved!";
-            document.getElementById('pulse').style.display = 'none';
-        }
-    }
-
-    function updateUI(p) {
-        document.getElementById('bar-fill').style.width = p + "%";
-        document.getElementById('percent').innerText = p + "%";
-    }
-
-    document.getElementById('fileInput').onchange = e => {
-        const url = `${window.location.origin}${window.location.pathname}?id=${peer.id}&t=${Date.now()}`;
-        window.tempUrl = url;
-        document.getElementById('link-area').style.display = 'block';
-        document.getElementById('status').innerText = "Waiting for knock...";
-    };
-
-    function copyLink() {
-        navigator.clipboard.writeText(window.tempUrl);
-        alert("Link Copied!");
-    }
-</script>
+    </script>
 </body>
 </html>
